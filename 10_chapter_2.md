@@ -66,7 +66,19 @@ e sono sempre più utilizzate nelle DNN in quanto svolgono due compiti:
 
 Nei modelli analizzati per questo motivo molti layer avranno attivazioni ReLU mentre altri avranno semplici attivazioni lineari (ovvero il risultato dell'attivazione è identico all'output del layer).
 
-## Pixel shuffle
+## Pixel-shuffle
 
+Molte delle prime reti neurali per super-risoluzione preprocessavano l'immagine a bassa risoluzione di input con un upsample bicubico, di cui parlerò più avanti. In seguito l'immagine già delle dimensioni uguali a quella dell'output atteso veniva passata alla rete che cercava di migliorarne appunto la risoluzione. Questo rendeva l'addestramento più semplice per la rete ma molto più lento, in quanto l'immagine di input aveva già dimensioni notevoli, aumentando esponenzialmente i calcoli richiesti durante i forward dei vari layer. Per ovviare a questo problema è stato introdotto qualche anno fa un layer chiamato pixel-shuffle, anche noto come layer di convoluzione sub-pixel. Questo layer mescola appunto i canali di un'immagine a bassa risoluzione per generarne una con meno canali ma con dimensioni maggiori. Praticamente consiste nel riorganizzare le dimensioni del tensore dell'immagine, ma anche nel mescolare tra loro i vari pixel durante l'operazione. Matematicamente la funzione applicata è la seguente:
+
+$$ PS(T)_{x,y,c} = T_{x//r , y//r , C\cdot r\cdot x\%r + C\cdot y\%r + c } $$
+
+e trasforma un'immagine [H x W x Crr] in una immagine  [rH x rW x C].
+Nella formula il simbolo " // " rappresenta il quoziente della divisione intera mentre " % " rappresenta il resto.
+Se l'immagine invece è in formato channel-first, ovvero ordinata come [C,H,W], la funzione di pixel-shuffle è leggermente diversa ma analoga. In Byron sono state implementate entrambe le versioni, in modo da garantire la massima versatilità possibile.
+
+Faccio notare che la funzione PixelShuffle della libreria Pytorch opera su immagini [C,H,W] mentre la funzione depth_to_space della libreria Tensorflow esegue il pixel-shuffle su immagini [H,W,C].
+
+Il vantaggio principale nell'utilizzo di questo layer è l'incremento di velocità della rete: infatti utilizzando questo layer alla fine (o comunque in uno dei layer finali) della rete, è possibile estrarre tutte le feature necessarie per la super-risoluzione (che in questo caso sono i vari filtri imparati) direttamente dall'immagine a bassa risoluzione di input, applicando vari layer di convoluzione, per poi riorganizzarle nell'immagine finale di dimensioni volute.
 
 ![Schema esplicativo del layer di pixel shuffle applicato dopo un layer di convoluzione. \label{pixshuff}](immagini/pixelshuffle.png){ width=100% }
+
