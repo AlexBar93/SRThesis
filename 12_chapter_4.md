@@ -1,72 +1,47 @@
-# Risultati
+# Framework
 
-## Tempi e performance
+Durante gli anni sono state sviluppate molte librerie per l'implementazione delle reti neurali, che si differenziano tra loro per performance, semplicità di uso, linguaggio di programmazione usato e hardware supportato. Di seguito elencherò i principali framework utilizzati durante questo lavoro di tesi.
 
-In questo capitolo illustrerò i vari risultati ottenuti confrontando i tempi di calcolo della rete per processare una immagine tra le varie reti e valutando i vari miglioramenti di qualità delle immagini.
+## Darknet
 
-### EDSR vs WDSR
+Darknet [@darknet] è un framework per reti neurali scritto in Ansi C da Joseph Redmon, dottorando all'Università di Washington in computer vision, con supporto nativo solo per sistemi operativi Linux (anche se sono stati effettuati vari porting per altre piattaforme tra cui Windows) e ottimizzato per GPU (solo CUDA [@cuda], quindi solo schede grafiche NVidia). Risulta una delle migliori librerie per reti neurali applicate al campo dell'object detection attualmente disponibili e open source, in termini di performance e risultati [@yolov3], grazie all'implementazione nativa in questo framework della rete YOLOv3. Tuttavia ha alcuni aspetti che possono essere migliorati, come la compatibilità tra piattaforme diverse e una migliore gestione del calcolo parallelo su CPU. Per questo motivo è nata l'idea di Byron, un porting in C++ di Darknet che per ora si concentra su questi punti e sull'estensione del framework con nuove funzioni. Un porting è una "traduzione" del codice da una piattaforma o linguaggio a un altro, che solitamente viene fatto per motivi di compatibilità o per migliorare le performance (come nel mio caso).
 
-Come prima analisi ho confrontato i tempi di calcolo delle due reti per super-risoluzione implementate. In figura \ref{edsrvswdsr} sono rappresentati i risultati ottenuti dopo aver utilizzato per 100 volte le reti su una singola immagine di dimensioni 510x339. Come si può notare la rete WDSR è molto più veloce, oltre un fattore 10 di velocità. Ciò è dovuto principalmente al fatto che questa versione della rete ha molti meno parametri della contendente, e i layer di convoluzione hanno quindi molti meno filtri e meno operazioni da svolgere. Tuttavia è stato dimostrato (ref) che la struttura della rete WDSR, grazie all'omissione dei layer finali di convoluzione dopo l'upsampling dell'immagine, a parità di parametri è notevolmente più efficiente della struttura della rete EDSR.
+## PyTorch e Keras
 
-boxplot
+Altri framework per reti neurali molto popolari al momento sono PyTorch [@pytorch] e Keras [@keras]. Entrambi sono scritti in Python, e di conseguenza sono pensati per essere di facile uso per l'utente e consentono di scrivere e impostare velocemente anche modelli complicati. PyTorch è un porting in Python della libreria Torch, scritta in Lua. Essendo scritto quasi completamente in Python, questo framework offre un tradeoff tra performance e semplicità d'uso, in quanto Python è un linguaggio di alto livello e di conseguenza generalmente meno performante in quanto gestisce alcune variabili, tra cui la memoria allocata, in maniera automatica e non sempre nel modo ottimale. Keras invece è un wrapping di un'altra libreria scritta in Python chiamata Tensorflow, che a sua volta è un wrapping della versione in C++ della stessa libreria. Un wrapping è una interfaccia di codice che permette di usare codice sorgente scritto in un altro linguaggio o in generale più complicato e complesso da utilizzare. Ciò solitamente permette all'utente di scrivere codice più facilmente e più velocemente, tuttavia in questo caso c'è un tempo di overhead poichè il computer deve "tradurre" le istruzioni dal livello più alto (in questo caso Keras) al livello più basso (in questo caso Tensorflow in C++). Faccio notare che comunque questo tempo di overhead è molto inferiore solitamente rispetto ai tempi di calcolo effettivamente necessari nei vari layer della rete, e quindi sia Keras che Tensorflow sono entrambe librerie molto performanti e molto generiche, in grado di consentire l'implementazione di modelli di reti neurali di vario tipo. Inoltre le considerazioni che ho fatto finora valgono per quanto riguarda l'utilizzo su CPU di queste librerie, in quanto per l'utilizzo su GPU tutti questi framework si appoggiano a librerie esterne come cuDNN[@gemm].
 
-### Numero di core
+Parlo di queste librerie perchè sono state in parte utilizzate durante il mio lavoro di tesi. Visti i lunghi tempi richiesti per la scrittura di una libreria così vasta e per il debugging necessario ad assicurarsi che funzionasse correttamente, ho scelto di non addestrare di persona le reti di cui parlerò più avanti. Questo avrebbe richiesto molti altri test oltre che ovviamente il tempo di addestramento, che per queste reti solitamente è superiore a una settimana sulle GPU più performanti del momento [@edsr, @wdsr]. Di conseguenza ho preso i pesi delle reti pre-addestrate, che però erano disponibili solamente per l'implementazione in PyTorch (per la rete EDSR) e per quella in Keras (per la WDSR). Ciò ha reso necessaria ovviamente la scrittura di ulteriore codice per la conversione dei pesi tra i vari modelli. Ho inoltre riscontrato che la versione dell'EDSR messa a disposizione nella repository ufficiale non compila su CPU. Questo problema è noto ai programmatori che hanno fatto il porting della rete da Torch ma non è stato ancora risolto. Di conseguenza l'implementazione su Byron dell'EDSR è per ora l'unica (a mia conoscenza) funzionante su CPU.
 
-Come seconda analisi ho studiato l'andamento della velocità di calcolo in funzione del numero di core fisici utilizzati dalla macchina durante i test. In questo caso il confronto è tra 100 run della rete WDSR su una singola immagine di dimensioni 510x339. Come si può notare dal grafico in figura \ref{core}, non c'è una corrispondenza uno a uno tra numero di core e speedup. Ciò significa che, per esempio, raddoppiare il numero di core non comporta un raddoppiamento della velocità di calcolo. Questo andamento è normale in quanto all'aumentare del numero di core aumenta il tempo necessario in cui il master thread (che gestisce tutti gli altri) deve distribuire le informazioni necessarie per i calcoli ad ogni core o recuperare i risultati ottenuti per procedere al successivo ciclo di istruzioni. Sicuramente si può ridurre questo tempo di overhead gestendo meglio le funzioni della libreria OpenMP utilizzata per gestire il multi-threading.
+## Byron
 
-catplot e spezzata collegata
+Come detto sopra, Byron è un framework in C++ (standard 2017) basato per la maggior parte sul codice sorgente di Darknet. Tuttavia essendo stata riscritta da zero, questa libreria ha numerose migliorie e inoltre per alcuni aspetti critici, come la gestione dei core, adotta strategie nuove permettendo delle performance nettamente superiori a Darknet. Sia in Byron che in Darknet la gestione dei core e dei thread del processore viene effettuata tramite la libreria OpenMP [@openmp]. Tuttavia questa libreria ha varie direttive per gestire la divisione dei compiti da svolgere durante il codice tra i vari thread. Per esempio, in Darknet la GEMM è implementata con il seguente codice:
 
-### Byron vs Darknet
+```c
+void gemm_nn(int M, int N, int K, float ALPHA,
+        float *A, int lda,
+        float *B, int ldb,
+        float *C, int ldc)
+{
+    int i,j,k;
+    #pragma omp parallel for
+    for(i = 0; i < M; ++i){
+        for(k = 0; k < K; ++k){
+            register float A_PART = ALPHA*A[i*lda+k];
+            for(j = 0; j < N; ++j){
+                C[i*ldc+j] += A_PART*B[k*ldb+j];
+            }
+        }
+    }
+}
+```
 
-Come ultima analisi temporale ho confrontato la velocità di calcolo tra Byron e la libreria su cui è basata, Darknet. Visto che quest'ultima non ha implementato il layer di pixel-shuffle, non è possibile testare le reti per super-risoluzione come mezzo per valutare a parità di rete la velocità delle due librerie. Per questo motivo ho implementato anche in Byron una delle reti più utilizzate della libreria Darket, chiamata YOLO, di cui parlerò più approfonditamente nel prossimo capitolo. Di seguito riporto quindi lo speedup relativo di Byron per 100 run della rete YOLOv3 su una singola immagine di dimensioni 608x608. Come si può notare dal grafico in figura \ref{byvsdark}, c'è un aumento di velocità di circa un fattore 2. Ritengo che questo speedup abbia ampi margini di miglioramento in quanto Darknet non solo utilizza in modo non ottimale il multi-threading ma può anche essere migliorata dal punto di vista dell'implementazione dei layer più costosi in termini di tempi di calcolo come per esempio il layer di convoluzione, utilizzando algoritmi recenti quali il Winograd che sono risultati molto più efficienti dell'im2col (ref).
+dove la direttiva `#pragma omp parallel for` della libreria OpenMP apre una sessione parallela e implica che il ciclo `for` subito dopo di essa verrà svolto in parallelo ed ogni core si occuperà di una iterazione del ciclo. In problema è che la dichiarazione delle variabili di ciclo all'esterno della sessione parallela significa che tutti i thread effettueranno l'accesso alle stesse variabili, causando eventualmente problemi di concurrency.
 
-boxplot
+Per risolvere questo problema, in Byron impiego diverse direttive di OpenMP:
 
-## Qualità delle immagini
+- `#pragma omp parallel` viene usata solamente all'inizio del programma principale per aprire la sessione parallela che resterà aperta fino alla fine dell'esecuzione, in quanto tutti i vari loop della libreria saranno poi eseguiti in parallelo e non solo quelli della GEMM come avviene in Darknet;
+- `#pragma omp taskgroup` e `#pragma omp taskloop`  permettono di gestire i cicli come il `for` specificando eventuali variabili che i thread devono vedere come private in modo da non sovrascrivere quelle di altri thread e permettono anche di scegliere quanti thread devono occuparsi di una data funzione, permettendo una divisione dei compiti della rete sui vari core in maniera ottimale a seconda della potenza di calcolo disponibile sulla macchina al momento dell'esecuzione del codice. Sebbene durante questo lavoro di tesi non abbia addestrato le reti neurali utilizzate, questa specifica implementazione che è presente in tutte le funzioni della libreria permette di gestire più liberamente la fase di addestramento dividendo per esempio i core del computer in vari compiti quali caricamento delle immagini, propagazione forward e backward nella rete e aggiornamento dei pesi.
 
-### PSNR
-
-Il peak signal to noise ratio (PSNR) è una misura che solitamente viene adottata per misurare la bontà di compressione di un'immagine rispetto all'originale. Rappresenta il rapporto tra la massima potenza del segnale e il rumore di fondo. Viene solitamente espresso in decibel (dB) perchè le immagini hanno una gamma dinamica molto ampia e quindi avere una scala logaritmica rende i numeri più gestibili. Nel caso della super-risoluzione viene usato per confrontare l'immagine super-risoluta, in output dalla rete, con quella originale ad alta risoluzione prima che venisse ricampionata bicubicamente. Matematicamente viene definito come:
-
-$$ PSNR = 20 \cdot  log_{10}\left ( \frac{max(I)}{\sqrt{MSE}} \right ) $$
-
-dove $max(I)$ è il massimo valore assumibile dai pixel dell'immagine, solitamente 1 per immagini con valori decimali e 255 per immagini con valori interi. $MSE$ è il Mean Square Error e indica la discrepanza quadratica media fra i valori dell'immagine super-risoluta ed i valori dell'immagine originale. Matematicamente viene definito come:
-
-$$ MSE = \frac{1}{WH}\sum_{i=0}^{W-1}\sum_{j=0}^{H-1}\left \| I(i,j) - K(i,j)\right \|^{2} $$
-
-dove $W$ , $H$ sono rispettivamente larghezza e altezza dell'immagine e $I$, $K$ sono rispettivamente immagine originale e immagine super-risoluta.
-
-Il PSNR è uno degli indici di qualità più popolari tra le immagini, anche se non sempre ha un collegamento diretto con una qualità visuale percettibile dall'occhio umano. Faccio notare che sia EDSR che WDSR sono state addestrate per massimizzare questo valore (e quindi la verosimiglianza all'immagine originale). Una funzione diversa per l'ottimizzazione, per esempio la cosiddetta visual loss che dovrebbe essere una misura della qualità visuale percepita dall'occhio umano, può dare risultati visivamente migliori anche se con PSNR peggiori. La scelta del criterio per misurare la qualità dell'immagine e di conseguenza la funzione da ottimizzare per la rete rimane al giorno d'oggi un dibattito aperto e con varie opzioni valide.
-
-In figura \ref{psnr} riporto il confronto tra i PSNR misurati su 60 immagini del validation set del dataset DIV2K per tre diversi metodi di upsample: bicubico, super-risoluzione con WDSR e super-risoluzione con EDSR. Come si può notare c'è un notevole miglioramento nelle immagini super-risolute rispetto al semplice upsample bicubico. Tra le due reti invece, sebbene la differenza sia meno evidente, prevale la EDSR come qualità. Tuttavia è importante notare che la rete WDSR ha meno di 1/10 dei parametri della contendente, e quindi i risultati sono ragionevolmente peggiori. Se avessimo avuto lo stesso numero di parametri per le due reti, la struttura della WDSR avrebbe riportato risultati notevolmente migliori (ref). Ciò avrebbe comportato tuttavia un notevole aumento dei tempi di calcolo.
-
-boxplot
-
-### SSIM
-
-Un altro indice di qualità delle immagini molto usato è il structural similarity index (SSIM), una funzione molto complessa che cerca di valutare la somiglianza strutturale tra due immagini e che tiene anche conto del miglioramento visivo valutabile dall'occhio umano. Nella figura \ref{ssimmat} è illustrato il diagramma dei calcoli necessari per ottenere il SSIM tra due immagini. Matematicamente può essere espresso come:
-
-$$
-SSIM(I, K) = \frac{1}{N}\sum_{i=1}^{N} SSIM(x_{i}, y_{i})
-$$
-
-dove abbiamo $N$ box dell'immagine di dimensioni arbitrarie, solitamente 11x11 o 8x8. Per ogni box il SSIM è calcolato come:
-
-$$
-SSIM(x, y) = \frac{(2\mu_{x}\mu_{y} + c_{1})(2\sigma_{xy}+c_{2})}{(\mu_{x}^{2} + \mu_{y}^{2} + c_{1})(\sigma_{x}^{2}+\sigma_{y}^{2}+c_{2})}
-$$
-
-dove $\mu$ rappresenta la media, $\sigma^{2}$ la varianza, $\sigma_{xy}$ la covarianza, $c_{1}$ e  $c_{2}$ due parametri fissati per evitare divergenze al denominatore. Per calcolare il SSIM tra le immagini ho usato l'apposita funzione dalla libreria di python per calcoli statistici _skimage_.
-
-![Diagramma per il calcolo dell'indice SSIM. \label{ssimmat}](immagini/ssim.png){ width=100% }
-
-In figura \ref{ssim} riporto il confronto tra i SSIM misurati sulle stesse 60 immagini del validation set del dataset DIV2K utilizzate anche per calcolare il PSNR, ed anche in questo caso distinguendo i tre metodi impiegati. I risultati ottenuti sono concordi con le misure di PSNR precedentemente illustrate, e confermano che le reti per super-risoluzione migliorano notevolmente la qualità di un'immagine ricampionata ripristinandola fedelmente.
-
-boxplot
-
-
-### Confronto visuale
-
-grafico tempi vs psnr di bicubica, edsr, wdsr
-
-confronto patch bicubica / HR / EDSR / WDSR
+Oltre a queste correzioni per quanto riguarda la parallelizzazione del codice, Byron ha anche alcune funzioni completamente assenti in Darknet, tra cui il layer di pixel-shuffle che vede uso sempre maggiore nei modelli di reti neurali che elaborano le immagini e che permette l'implementazione delle migliori reti per super-risoluzione utilizzate al momento.
+Rispetto a Keras e Tensforflow il miglioramento principale consiste nell'implementazione del layer YOLO per la object detection. Infatti implementare questo layer direttamente in C++ all'interno di Tensorflow sarebbe parecchio arduo, a causa della struttura enorme e complessa del framework. Ed implementarlo in Python, per quanto leggermente più semplice, ridurrebbe drasticamente le performance.
+Ciò rende Byron un framework ottimizzato per CPU multi-core e per le reti neurali che si occupano di object detection e super-risoluzione.

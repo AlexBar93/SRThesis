@@ -18,7 +18,7 @@ Corso di Laurea Magistrale in Fisica}}
 
 \begin{center}\textcolor{black}{
 %
-{\LARGE{\bf Metodiche di super-risoluzione con deep neural network}}\\
+{\LARGE{\bf Sviluppo ed ottimizzazione di algoritmi per super-risoluzione ed object detection mediante deep neural network}}\\
 }\end{center}
 
 \vspace{50mm} \par \noindent
@@ -43,7 +43,7 @@ Dott. Nico Curti\\\\}}}
 Alex Baroncini}}}
 \end{minipage}
 
-\vspace{20mm}
+\vspace{10mm}
 
 \begin{center}
 %
